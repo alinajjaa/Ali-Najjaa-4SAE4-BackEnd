@@ -9,7 +9,6 @@ pipeline {
     environment {
         PROJECT = 'devopsTD'
         VERSION = '1.0.0'
-        MVN_CMD = isUnix() ? './mvnw' : 'mvnw.cmd'
     }
     
     stages {
@@ -75,10 +74,11 @@ pipeline {
             steps {
                 echo '🔨 COMPILING...'
                 script {
+                    def mvnCmd = isUnix() ? './mvnw' : 'mvnw.cmd'
                     if (isUnix()) {
-                        sh './mvnw clean compile'
+                        sh "${mvnCmd} clean compile"
                     } else {
-                        bat 'mvnw.cmd clean compile'
+                        bat "${mvnCmd} clean compile"
                     }
                 }
             }
@@ -98,10 +98,11 @@ pipeline {
             steps {
                 echo '🧪 TESTING...'
                 script {
+                    def mvnCmd = isUnix() ? './mvnw' : 'mvnw.cmd'
                     if (isUnix()) {
-                        sh './mvnw test'
+                        sh "${mvnCmd} test"
                     } else {
-                        bat 'mvnw.cmd test'
+                        bat "${mvnCmd} test"
                     }
                 }
             }
@@ -118,10 +119,11 @@ pipeline {
             steps {
                 echo '📦 PACKAGING...'
                 script {
+                    def mvnCmd = isUnix() ? './mvnw' : 'mvnw.cmd'
                     if (isUnix()) {
-                        sh './mvnw package -DskipTests'
+                        sh "${mvnCmd} package -DskipTests"
                     } else {
-                        bat 'mvnw.cmd package -DskipTests'
+                        bat "${mvnCmd} package -DskipTests"
                     }
                 }
             }
