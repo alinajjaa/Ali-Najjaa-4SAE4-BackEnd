@@ -1,15 +1,15 @@
-# Créer le Jenkinsfile complet
-@"
 pipeline {
     agent any
     
     options {
         timeout(time: 10, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
     
     environment {
         PROJECT = 'devopsTD'
         VERSION = '1.0.0'
+        MVN_CMD = isUnix() ? './mvnw' : 'mvnw.cmd'
     }
     
     stages {
@@ -20,11 +20,19 @@ pipeline {
                 checkout scm
                 
                 script {
-                    bat '''
-                        echo =========== GIT INFO ===========
-                        git log --oneline -1
-                        echo ================================
-                    '''
+                    if (isUnix()) {
+                        sh '''
+                            echo "=========== GIT INFO ==========="
+                            git log --oneline -1
+                            echo "================================"
+                        '''
+                    } else {
+                        bat '''
+                            echo =========== GIT INFO ===========
+                            git log --oneline -1
+                            echo ================================
+                        '''
+                    }
                 }
             }
         }
@@ -34,16 +42,31 @@ pipeline {
             steps {
                 echo '⚙️ SETTING UP...'
                 
-                bat '''
-                    echo Java Version:
-                    java -version
-                    echo.
-                    echo Maven Version:
-                    mvnw --version
-                    echo.
-                    echo Project Files:
-                    dir
-                '''
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            echo "Java Version:"
+                            java -version
+                            echo ""
+                            echo "Maven Version:"
+                            ./mvnw --version || echo "Maven wrapper not found"
+                            echo ""
+                            echo "Project Files:"
+                            ls -la
+                        '''
+                    } else {
+                        bat '''
+                            echo Java Version:
+                            java -version
+                            echo.
+                            echo Maven Version:
+                            mvnw.cmd --version || echo Maven wrapper not found
+                            echo.
+                            echo Project Files:
+                            dir
+                        '''
+                    }
+                }
             }
         }
         
@@ -51,7 +74,13 @@ pipeline {
         stage('Compile') {
             steps {
                 echo '🔨 COMPILING...'
-                bat 'mvnw clean compile'
+                script {
+                    if (isUnix()) {
+                        sh './mvnw clean compile'
+                    } else {
+                        bat 'mvnw.cmd clean compile'
+                    }
+                }
             }
             
             post {
@@ -59,7 +88,7 @@ pipeline {
                     echo '✅ COMPILATION OK!'
                 }
                 failure {
-                    error '❌ COMPILATION FAILED!'
+                    echo '❌ COMPILATION FAILED!'
                 }
             }
         }
@@ -68,12 +97,18 @@ pipeline {
         stage('Tests') {
             steps {
                 echo '🧪 TESTING...'
-                bat 'mvnw test'
+                script {
+                    if (isUnix()) {
+                        sh './mvnw test'
+                    } else {
+                        bat 'mvnw.cmd test'
+                    }
+                }
             }
             
             post {
                 always {
-                    junit 'target/surefire-reports/*.xml'
+                    junit 'target/surefire-reports/**/*.xml'
                 }
             }
         }
@@ -82,7 +117,13 @@ pipeline {
         stage('Package') {
             steps {
                 echo '📦 PACKAGING...'
-                bat 'mvnw package -DskipTests'
+                script {
+                    if (isUnix()) {
+                        sh './mvnw package -DskipTests'
+                    } else {
+                        bat 'mvnw.cmd package -DskipTests'
+                    }
+                }
             }
         }
         
@@ -92,17 +133,31 @@ pipeline {
                 echo '📊 SHOWING RESULTS...'
                 
                 script {
-                    bat '''
-                        if exist target\\*.jar (
-                            echo JAR FILES CREATED:
-                            dir target\\*.jar
-                            echo.
-                            echo JAR SIZE:
-                            for %%i in (target\\*.jar) do echo %%~zi bytes
-                        ) else (
-                            echo NO JAR FILES FOUND
-                        )
-                    '''
+                    if (isUnix()) {
+                        sh '''
+                            if [ -f target/*.jar ]; then
+                                echo "JAR FILES CREATED:"
+                                ls -lh target/*.jar
+                                echo ""
+                                echo "JAR SIZE:"
+                                du -h target/*.jar
+                            else
+                                echo "NO JAR FILES FOUND"
+                            fi
+                        '''
+                    } else {
+                        bat '''
+                            if exist target\\*.jar (
+                                echo JAR FILES CREATED:
+                                dir target\\*.jar
+                                echo.
+                                echo JAR SIZE:
+                                for %%i in (target\\*.jar) do echo %%~zi bytes
+                            ) else (
+                                echo NO JAR FILES FOUND
+                            )
+                        '''
+                    }
                 }
             }
         }
@@ -110,8 +165,11 @@ pipeline {
     
     post {
         always {
-            echo "🏁 BUILD \${currentBuild.currentResult}"
-            echo "URL: \${env.BUILD_URL}"
+            echo "🏁 BUILD ${currentBuild.currentResult}"
+            echo "URL: ${env.BUILD_URL}"
+            
+            // Clean workspace pour économiser de l'espace
+            cleanWs()
         }
         
         success {
@@ -122,6 +180,9 @@ pipeline {
         failure {
             echo '❌ FAILURE! Check console.'
         }
+        
+        unstable {
+            echo '⚠️ BUILD UNSTABLE!'
+        }
     }
 }
-"@ | Out-File -FilePath Jenkinsfile -Encoding UTF8
